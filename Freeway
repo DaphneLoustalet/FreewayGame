@@ -44,16 +44,16 @@ rightk:	CMA# 'k'
 	lda#	1	; set to RIGHT_UP
 	jmp	MoveRight
 	; move cursor right
-leftj:	CMA# 'k'
+leftj:	CMA# 'j'
 	JNE upi
 	; move cursor left
-upi:	CMA# 'k'
+upi:	CMA# 'i'
 	JNE downm
 	; move cursor up
-downm:	CMA# 'k'
+downm:	CMA# 'm'
 	JNE None
 	; move cursor down
-None:	LDA# Interrupt_Enabled
+None:	LDA# INTERRUPT_ENABLED
 	OUTB KBD_CNTL
 	POPA
 	IRTN
