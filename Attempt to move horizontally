@@ -1,0 +1,61 @@
+		.EQU	CRT_DATA,$317
+
+		.EQU	TIM_CNTL,$030
+		.EQU	TIM_STAT,$030
+		.EQU	TIM_VALUE,$031
+		.EQU	TIM_COUNT,$034
+
+		.EQU	CRT_VBUFF,$100
+		.EQU 	CRT_CNTL,$316
+
+		.EQU	INTERRUPT_ENA,$80
+		.EQU	RESET_READY_BIT,$40
+		.EQU	START_AFTER_LOAD,$10
+		.EQU	ENABLE_RESET_AND_START,$D0
+		.EQU	ENABLE_AND_RESET,$C0
+		.EQU	CLEAR_SCREEN,$01
+
+		.EQU	STACKTOP,$E00
+
+MAIN:		LDS#	STACKTOP
+; init. top of stack
+		LDA# CLEAR_SCREEN ; clear screen
+		OUTB CRT_CNTL
+		LDA# 1000
+		; INB FRAME_SPEED
+		OUTW TIM_VALUE	; reload value register := 1000
+
+; enable timer interrupts, reset ready bit,
+; and start timer after loading counter
+
+		LDA#	ENABLE_RESET_AND_START
+		OUTB	TIM_CNTL
+		SIE			; enable interrupts
+DO_WORK: 	NOP			; can insert useful code here
+		NOP 
+		JMP	DO_WORK		; loop forever
+
+ISR:		PSHA			; save registers
+		LDA#	ENABLE_AND_RESET
+		OUTB	TIM_CNTL	; reset ready bit
+LOOP:		LDX#	0
+InnerLoop:		LDA#	CLEAR_SCREEN
+		OUTB	CRT_CNTL
+		CLR	CHAR
+		LDA#	$46
+		OUTB+	CRT_VBUFF
+		ADX#	1
+		CMX	CRT_WIDTH	
+		JGT	LOOP
+		JLE	InnerLoop
+		OUTB	CRT_DATA	
+		POPA			; restore registers
+		IRTN
+CHAR: .BLKW 1
+
+		.EQU	@,$FFB		; init. interrupt vector
+		.WORD	ISR
+CRT_WIDTH:       .WORD 	38
+FRAME_SPEED:	.WORD	50
+
+		.END
