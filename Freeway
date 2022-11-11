@@ -19,6 +19,7 @@
 
 ; Main
 	; StartOfGame - Initialization of lives to 5, levels from 0, score from 0
+	; print score in top row
 
 ; Start
 	; Initialize player position and cars' positions
