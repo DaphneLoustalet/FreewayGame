@@ -3,8 +3,8 @@
 	.EQU KBD_STAT, $000
 	.EQU KBD_DATA, $001
 
-	.EQU INTERRUPT_ENA, $80
-; .EQU for Cursor + Display 
+	.EQU INTERRUPT_ENABLED, $80
+; .EQU for Display 
 	.EQU CRT_XREG, $314
 	.EQU CRT_YREG, $315
 	.EQU CRT_CNTL, $316
@@ -15,13 +15,37 @@
 	.EQU BOTTOM, 13
 	.EQU LEFT, 0
 	.EQU RIGHT, 37
+	.EQU StartingAddress,$100
+	.EQU CharacterRowStart, 12 
+	.EQU CharacterColumnStart, 18
+	.EQU Character_Symbol, '*'
 
+
+; .EQU for StackPointer
+	.EQU StackPointer, $E00
+	LDS# StackPointer
 
 ; Main
 	; StartOfGame - Initialization of lives to 5, levels from 0, score from 0
-
+	LDA# INTERRUPT_ENABLED
+	OUTB KBD_CNTL
+	INB KBD_STAT
+	SIE
+LOOP: 	JMP LOOP
 ; Start
-	; Initialize player position and cars' positions
+	; Initialize player position
+		; CharacterPositionAtStartOfGame
+	LDA# CharacterRowStart
+	MUL# CRT_COLS
+	STA Temp
+	LDA# CharacterColumnStart
+	ADA Temp
+	STA Temp
+	LDA StartingAddress
+	ADA Temp	; ACC now holds Character position at start of game
+	STA CharacterPosition	; CharacterPosition now holds position of character at the start of the game which is in the middle of Starting Row
+
+	; Initialize cars' positions
 
 ; Play
 	; Start timer, set keyboard interrupt, loop cars to keep them moving
@@ -33,41 +57,123 @@
 
 ; Procedure keyboardISR
 keyboardISR:	PSHA
-	LDA# 0
-	OUTB KBD_CNTL
 	INB KBD_DATA
 	CMA# 'd' ; just used d for now as a way to halt the game  NEED TO CHANGE LATER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 	JNE rightk
 	HLT
 rightk:	CMA# 'k'
 	JNE leftj
-	lda#	1	; set to RIGHT_UP
-	jmp	MoveRight
-	; move cursor right
+	JMP MoveRight
+	; check to make sure character cannot go out of bounds
+	; then move car position right
 leftj:	CMA# 'j'
 	JNE upi
-	; move cursor left
+	JMP MoveLeft
+	; check to make sure character cannot go out of bounds
+	; move car position left
 upi:	CMA# 'i'
 	JNE downm
-	; move cursor up
+	JMP MoveUp
+	; check to make sure character cannot go out of bounds
+	; move car position up
 downm:	CMA# 'm'
 	JNE None
-	; move cursor down
+	JMP MoveDown
+	; check to make sure character cannot go out of bounds
+	; move car position down
 None:	LDA# INTERRUPT_ENABLED
 	OUTB KBD_CNTL
 	POPA
 	IRTN
-MoveRight:
+MoveRight:	LDA CharacterX
+	CMA# CRT_COLS-1
+	JGE ExitKBDISR
+	ADA# 1
+	STA CharacterX
+	PSH CharacterX			;calculate new position based on the increased x value
+	PSH CharacterY
+	PSH CharacterPosition
+	JSR movePosition
+	ADS# 3
+	STA CharacterPosition			;stores new position
+	LDA# $41
+	OUTB* CharacterPosition			;print character into new position
+	JMP ExitKBDISR
+MoveLeft:	LDA CharacterX
+	CMA# 0
+	JEQ ExitKBDISR
+	SBA# 1
+	STA CharacterX
+	PSH CharacterX			;calculate new position based on the decreased x value
+	PSH CharacterY
+	PSH CharacterPosition
+	JSR movePosition
+	ADS# 3
+	STA CharacterPosition			;stores new position
+	LDA# $41
+	OUTB* CharacterPosition	
+	JMP ExitKBDISR
+MoveUp:	LDA CharacterY
+	CMA# 0
+	JLE ExitKBDISR
+	SBA# 1
+	STA CharacterY
+	PSH CharacterX			;calculate new position based on the decreased y value
+	PSH CharacterY
+	PSH CharacterPosition
+	JSR movePosition
+	ADS# 3
+	STA CharacterPosition			;stores new position
+	LDA# $41
+	OUTB* CharacterPosition	
+	JMP ExitKBDISR
+MoveDown:	LDA CharacterY
+	CMA# CRT_ROWS-1
+	JGE ExitKBDISR
+	ADA# 1
+	STA CharacterY
+	PSH CharacterX			;calculate new position based on the increased y value
+	PSH CharacterY
+	PSH CharacterPosition
+	JSR movePosition
+	ADS# 3
+	STA CharacterPosition			;stores new position
+	LDA# $41
+	OUTB* CharacterPosition	
+	JMP ExitKBDISR
+ExitKBDISR:	POPA
+	IRTN
+
+; Procedure CalculateCharacterPosition
+	; .EQU 
+
+; Procedure MoveCharacterPosition (used whenever there is a keyboard interrupt)
+	.EQU columnOffset, 4
+	.EQU rowOffset, 3
+	.EQU CharacterPositionParameter, 2
+movePosition:	BGN# 0			;
+	LDA# $20			;replace old crt position with space character
+	OUTB* ! CharacterPositionParameter
+	LDA ! rowOffset			;calculates new crt position
+	MUL# CRT_COLS
+	STA Temp
+	LDA ! columnOffset
+	ADA Temp
+	STA Temp
+	LDA# StartingAddress
+	ADA Temp			; ACC now holds Character position at start of game
+	STA ! CharacterPositionParameter
+
+	LDA ! CharacterPositionParameter	;returns new character position
+	FIN# 0
+	RTN
 
 
 
-; moveCursorCharacter (used whenever there is a keyboard interrupt)
-	.EQU moveKey, 4
-	.EQU moveY, 3
-	.EQU moveX, 2
-moveCursor:	BGN# 0
+; Procedure PrintCharacterAtPosition
+	INB Character_Symbol
+	OUTB CharacterPosition
 	
-
 
 ; Procedure LevelComplete
 
@@ -104,12 +210,19 @@ moveCursor:	BGN# 0
 
 
 
-
-
 ; Variables
-Score: .WORD 0
-Lives: .WORD 5
-Level: .WORD 0 
+Score:	.WORD 0
+Lives:	.WORD 5
+Level: 	.WORD 0 
 CarsVelocity: .BLKW 9, 0
 CarsRowPosition: .BLKW 9, 0
 CarsColumnPosition: .BLKW 9, 0
+CharacterX:	.WORD 18
+CharacterY:	.WORD 12
+CharacterPosition:	.WORD $100
+Temp:	.WORD 0
+
+
+
+.EQU @, $FF8
+.WORD keyboardISR
